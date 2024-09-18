@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KML to Waypoints Map</title>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        #fileInput { position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; padding: 5px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <input type="file" id="fileInput" accept=".kml" />
+    <div id="map"></div>
+    <script>
+        // Leaflet地図の初期化
+        const map = L.map('map').setView([35.6895, 139.6917], 13); // 東京の座標
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // KMLファイルの読み込みと解析
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const kmlText = e.target.result;
+                    // KMLデータを解析して地図上に表示
+                    parseKMLAndDisplayOnMap(kmlText);
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        // KMLデータを解析して地図上に表示する関数
+        function parseKMLAndDisplayOnMap(kmlText) {
+            // KMLデータを解析（単純な例としてPolygonの座標を取得）
+            const parser = new DOMParser();
+            const kml = parser.parseFromString(kmlText, 'application/xml');
+            const coordinates = kml.querySelectorAll('coordinates');
+            let geoData = [];
+            coordinates.forEach(coord => {
+                const coordsArray = coord.textContent.trim().split(' ').map(pair => {
+                    const [lng, lat] = pair.split(',').map(Number);
+                    return [lat, lng];
+                });
+                geoData.push(...coordsArray);
+            });
+
+            // 緯度・経度データを直線で結ぶ
+            if (geoData.length > 1) {
+                const polyline = L.polyline(geoData, { color: 'blue' }).addTo(map);
+                map.fitBounds(polyline.getBounds());
+
+                // 線分をクリックしたときのイベントを設定
+                polyline.on('click', function() {
+                    const length = calculateDistance(geoData);
+                    alert(`空路の長さ: ${length.toFixed(2)} メートル`);
+                });
+
+                // スタート地点とゴール地点のマーカーを追加
+                const startMarker = L.circleMarker(geoData[0], {
+                    color: 'blue',
+                    fillColor: 'blue',
+                    fillOpacity: 1,
+                    radius: 10
+                }).addTo(map).bindTooltip("S", { permanent: true, direction: 'center', className: 'start-tooltip' });
+
+                const endMarker = L.circleMarker(geoData[geoData.length - 1], {
+                    color: 'red',
+                    fillColor: 'red',
+                    fillOpacity: 1,
+                    radius: 10
+                }).addTo(map).bindTooltip("G", { permanent: true, direction: 'center', className: 'end-tooltip' });
+            }
+        }
+
+        // 座標配列から距離を計算する関数
+        function calculateDistance(coords) {
+            let totalDistance = 0;
+            for (let i = 0; i < coords.length - 1; i++) {
+                totalDistance += map.distance(coords[i], coords[i + 1]);
+            }
+            return totalDistance;
+        }
+    </script>
+</body>
+</html>
